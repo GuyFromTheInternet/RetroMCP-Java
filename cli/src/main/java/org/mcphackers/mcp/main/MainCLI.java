@@ -53,8 +53,6 @@ public class MainCLI extends MCP {
 		changeLanguage(Language.ENGLISH); // Some CLI text is hardcoded in English
 		log("RetroMCP " + MCP.VERSION);
 
-		boolean startedWithNoParams = false;
-		boolean exit = false;
 		String version = null;
 		Path versionPath = Paths.get(MCPPaths.VERSION);
 		VersionParser versionParser = VersionParser.getInstance();
@@ -75,7 +73,6 @@ public class MainCLI extends MCP {
 			}
 		}
 		if (args.length == 0) {
-			startedWithNoParams = true;
 			log(LOGO.toString());
 			JavaCompiler c = ToolProvider.getSystemJavaCompiler();
 			if (c == null) {
@@ -88,71 +85,45 @@ public class MainCLI extends MCP {
 			}
 			if (version != null) log(version);
 			log(new Ansi().fgDefault().a("Enter a command to execute:").toString());
+			for (TaskMode mode : TaskMode.registeredTasks) {
+				log(new Ansi()
+						.fgBrightMagenta().a(" - " + String.format("%-12s", mode.getName())).fgDefault()
+						.fgGreen().a(" ").a(mode.getDesc()).fgDefault().toString());
+			}
+			return;
 		}
-		int executeTimes = 0;
-		while (startedWithNoParams && !exit || !startedWithNoParams && executeTimes < 1) {
-			while (args.length < 1) {
-				System.out.print(new Ansi().fgBrightCyan().a("> ").fgDefault());
-				String str = null;
-				try {
-					if (consoleInput.hasNextLine()) {
-						str = consoleInput.nextLine();
-					} else {
-						// Only seems to occur during EOF, might occur in other cases?
-						System.exit(0);
-					}
-				} catch (NoSuchElementException ignored) {
-				}
-				if (str == null) {
-					mode = TaskMode.EXIT;
-				} else {
-					str = str.trim();
-					if (str.isEmpty()) {
-						continue;
-					}
-					System.out.print(new Ansi().fgDefault());
-					args = str.split(" ");
-				}
+
+		boolean taskMode = setMode(args[0]);
+		Map<String, Object> parsedArgs = new HashMap<>();
+		for (int index = 1; index < args.length; index++) {
+			parseArg(args[index], parsedArgs);
+		}
+		setParams(parsedArgs, mode);
+		if (mode == TaskMode.SETUP && versions != null) {
+			if (versionParser.getVersion(getOptions().getStringParameter(TaskParameter.SETUP_VERSION)) == null) {
+				log(new Ansi().fgMagenta().a("================ ").fgDefault().a("Current versions").fgMagenta().a(" ================").fgDefault().toString());
+				log(getTable(versions));
+				log(new Ansi().fgMagenta().a("==================================================").fgDefault().toString());
 			}
-			boolean taskMode = setMode(args[0]);
-			Map<String, Object> parsedArgs = new HashMap<>();
-			for (int index = 1; index < args.length; index++) {
-				parseArg(args[index], parsedArgs);
-			}
-			setParams(parsedArgs, mode);
-			if (mode == TaskMode.SETUP && versions != null) {
-				if (versionParser.getVersion(getOptions().getStringParameter(TaskParameter.SETUP_VERSION)) == null) {
-					log(new Ansi().fgMagenta().a("================ ").fgDefault().a("Current versions").fgMagenta().a(" ================").fgDefault().toString());
-					log(getTable(versions));
-					log(new Ansi().fgMagenta().a("==================================================").fgDefault().toString());
+		}
+		if (taskMode) {
+			performTask(mode, side);
+		} else if (mode == TaskMode.HELP) {
+			if (helpCommand == null) {
+				for (TaskMode mode : TaskMode.registeredTasks) {
+					log(new Ansi()
+							.fgBrightMagenta().a(" - " + String.format("%-12s", mode.getName())).fgDefault()
+							.fgGreen().a(" ").a(mode.getDesc()).fgDefault().toString());
+				}
+			} else {
+				log(new Ansi().fgBrightMagenta().a(" - " + String.format("%-12s", helpCommand.getName())).fgDefault().fgGreen().a(" ").a(helpCommand.getDesc()).fgDefault().toString());
+				if (helpCommand.params.length > 0) log("Optional parameters:");
+				for (TaskParameter param : helpCommand.params) {
+					log(new Ansi().a(" ").fgCyan().a(String.format("%-14s", param.name)).a(" - ").fgBrightYellow().a(param.getDesc()).fgDefault().toString());
 				}
 			}
-			if (taskMode) {
-				performTask(mode, side);
-			} else if (mode == TaskMode.HELP) {
-				if (helpCommand == null) {
-					for (TaskMode mode : TaskMode.registeredTasks) {
-						log(new Ansi()
-								.fgBrightMagenta().a(" - " + String.format("%-12s", mode.getName())).fgDefault()
-								.fgGreen().a(" ").a(mode.getDesc()).fgDefault().toString());
-					}
-				} else {
-					log(new Ansi().fgBrightMagenta().a(" - " + String.format("%-12s", helpCommand.getName())).fgDefault().fgGreen().a(" ").a(helpCommand.getDesc()).fgDefault().toString());
-					if (helpCommand.params.length > 0) log("Optional parameters:");
-					for (TaskParameter param : helpCommand.params) {
-						log(new Ansi().a(" ").fgCyan().a(String.format("%-14s", param.name)).a(" - ").fgBrightYellow().a(param.getDesc()).fgDefault().toString());
-					}
-				}
-			} else if (mode != TaskMode.EXIT) {
-				log("Unknown command. Type 'help' for list of available commands");
-			}
-			args = new String[]{};
-			options.resetDefaults();
-			if (!startedWithNoParams || mode == TaskMode.EXIT)
-				exit = true;
-			mode = null;
-			helpCommand = null;
-			executeTimes++;
+		} else if (mode != TaskMode.EXIT) {
+			log("Unknown command. Type 'help' for list of available commands");
 		}
 	}
 
