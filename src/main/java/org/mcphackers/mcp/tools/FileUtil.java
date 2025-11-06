@@ -35,7 +35,10 @@ import org.mcphackers.mcp.MCP;
 
 public abstract class FileUtil {
 
+	private static final Throttler throttler = new Throttler(50);
+
 	public static void delete(Path path) throws IOException {
+		throttler.throttle();
 		if (!Files.exists(path)) {
 			return;
 		}
@@ -47,6 +50,7 @@ public abstract class FileUtil {
 	}
 
 	public static void createDirectories(Path path) throws IOException {
+		throttler.throttle();
 		if (!Files.exists(path)) {
 			Files.createDirectories(path);
 		}
@@ -56,6 +60,7 @@ public abstract class FileUtil {
 	public static void packFilesToZip(Path sourceZip, Iterable<Path> files, Path relativeTo) throws IOException {
 		try (FileSystem fs = FileSystems.newFileSystem(sourceZip, (ClassLoader) null)) {
 			for (Path file : files) {
+				throttler.throttle();
 				Path fileInsideZipPath = fs.getPath("/" + relativeTo.relativize(file));
 				Files.deleteIfExists(fileInsideZipPath);
 				if (fileInsideZipPath.getParent() != null && !Files.exists(fileInsideZipPath.getParent()))
@@ -68,6 +73,7 @@ public abstract class FileUtil {
 	@SuppressWarnings("RedundantCast")
 	public static void deleteFileInAZip(Path sourceZip, String file) throws IOException {
 		try (FileSystem fs = FileSystems.newFileSystem(sourceZip, (ClassLoader) null)) {
+			throttler.throttle();
 			Path fileInsideZipPath = fs.getPath(file);
 			Files.deleteIfExists(fileInsideZipPath);
 		}
@@ -76,6 +82,7 @@ public abstract class FileUtil {
 	@SuppressWarnings("RedundantCast")
 	public static void copyFileFromAZip(Path sourceZip, String file, Path out) throws IOException {
 		try (FileSystem fs = FileSystems.newFileSystem(sourceZip, (ClassLoader) null)) {
+			throttler.throttle();
 			Path fileInsideZipPath = fs.getPath(file);
 			Files.copy(fileInsideZipPath, out);
 		}
@@ -96,6 +103,7 @@ public abstract class FileUtil {
 		try (ZipInputStream zipInputStream = new ZipInputStream(zipFile)) {
 			ZipEntry entry;
 			while ((entry = zipInputStream.getNextEntry()) != null) {
+				throttler.throttle();
 				Path toPath = destDir.resolve(entry.getName()).normalize();
 				Files.deleteIfExists(toPath);
 				if (!entry.isDirectory()) {
@@ -115,6 +123,7 @@ public abstract class FileUtil {
 		try (ZipInputStream zipInputStream = new ZipInputStream(Files.newInputStream(zipFile))) {
 			ZipEntry entry;
 			while ((entry = zipInputStream.getNextEntry()) != null) {
+				throttler.throttle();
 				Path toPath = destDir.resolve(entry.getName()).normalize();
 				Files.deleteIfExists(toPath);
 				if (match.apply(entry)) {
@@ -198,6 +207,7 @@ public abstract class FileUtil {
 		}
 		try (Stream<Path> pathStream = Files.walk(sourceFolder)) {
 			pathStream.forEach(source -> {
+				throttler.throttle();
 				Path destination = targetFolder.resolve(sourceFolder.relativize(source));
 				try {
 					if (!Files.isDirectory(destination)) {
